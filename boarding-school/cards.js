@@ -7,6 +7,19 @@ window.SchoolCards = Object.freeze([
     flavor: "You hear the teacher and the shuffle of slippers in the hall. You remember about half of each.",
   },
   {
+    id: "C02", name: "Doze Off in Class", category: "classroom", allowedSlots: ["07:00", "09:00", "13:00"],
+    diceEffects: [{ stat: "M", count: 1, sides: 4, bonus: 0 }],
+    fixedEffects: [], tags: ["recovery"], eventGate: 10,
+    note: "10% chance of being called on for −3 Mental State.",
+    flavor: "When you wake, the board has already been wiped.",
+  },
+  {
+    id: "C03", name: "Daydream in Class", category: "classroom", allowedSlots: ["07:00", "09:00", "13:00"],
+    diceEffects: [], fixedEffects: [{ stat: "M", delta: 1 }], tags: [], eventGate: 40,
+    note: "40% chance of a thought that may unlock a card. No Knowledge gain.",
+    flavor: "Nothing happens outside the window. In your head, you have already left school several times.",
+  },
+  {
     id: "C06", name: "Copy the Board", category: "classroom", allowedSlots: ["07:00", "09:00", "13:00"],
     diceEffects: [{ stat: "K", count: 1, sides: 2, bonus: 1 }],
     fixedEffects: [{ stat: "M", delta: -1 }], tags: ["learning"],
@@ -17,6 +30,13 @@ window.SchoolCards = Object.freeze([
     diceEffects: [{ stat: "H", count: 1, sides: 6, bonus: 0 }],
     fixedEffects: [], tags: [],
     flavor: "The food tastes the same as always. By the time your tray is empty, you're ready for whatever comes next.",
+  },
+  {
+    id: "E06", name: "A Meal from Home", category: "meal", allowedSlots: ["11:00", "17:00"],
+    diceEffects: [{ stat: "H", count: 2, sides: 6, bonus: 2 }],
+    fixedEffects: [{ stat: "M", delta: 2 }], tags: [], unlock: true, consumable: true,
+    note: "One meal per delivery. Free.",
+    flavor: "The meal is still warm. You decide to eat before thinking about yesterday's conversation.",
   },
   {
     id: "F01", name: "Study Through Break", category: "free", allowedSlots: ["15:00", "17:00"],
@@ -31,10 +51,31 @@ window.SchoolCards = Object.freeze([
     flavor: "A breeze crosses the track. For one lap, the future can wait.",
   },
   {
+    id: "F05", name: "Write a Few Lines", category: "free", allowedSlots: ["15:00", "17:00"],
+    diceEffects: [{ stat: "M", count: 1, sides: 4, bonus: 0 }, { stat: "A", count: 1, sides: 2, bonus: 0 }],
+    fixedEffects: [], tags: ["recovery"], dailyLimit: 1,
+    note: "Once per day.",
+    flavor: "There is no answer key on this page.",
+  },
+  {
+    id: "F08", name: "Rework Your Mistakes", category: "free", allowedSlots: ["15:00", "17:00"],
+    diceEffects: [{ stat: "K", count: 2, sides: 4, bonus: 1 }],
+    fixedEffects: [{ stat: "M", delta: -3 }], tags: ["learning"], unlock: true,
+    note: "Unlock through a daydream or on Day 3.",
+    flavor: "You get it wrong once more. Then you get one problem right.",
+  },
+  {
     id: "N01", name: "Get Some Sleep", category: "night", allowedSlots: ["19:00"],
     diceEffects: [{ stat: "M", count: 1, sides: 6, bonus: 2 }],
     fixedEffects: [], tags: ["recovery"],
     flavor: "The dorm lights go out. Whatever is left of today can wait until morning.",
+  },
+  {
+    id: "N03", name: "Put the Book Down Early", category: "night", allowedSlots: ["19:00"],
+    diceEffects: [{ stat: "M", count: 2, sides: 4, bonus: 2 }],
+    fixedEffects: [], tags: ["recovery"], unlock: true, cooldown: 1,
+    note: "One full day of cooldown after use.",
+    flavor: "You admit you are tired and leave tomorrow's work for tomorrow.",
   },
 ].map((card) => Object.freeze({
   ...card,

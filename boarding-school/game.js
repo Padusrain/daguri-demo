@@ -1,8 +1,8 @@
-// Game/UI contract. Load cards.js first, then call SchoolGame.createGame({ rollDie? }).
+// Game/UI contract. Load cards.js and events.js before calling SchoolGame.createGame({ rollDie? }).
 // Actions: rollAttributes(), acceptAttributes(), setCard(slotId, cardId), fillDefaults(),
-// startDay(), resolveNext(), advanceDay(). Each returns { ok, message? }.
+// startDay(), resolveNext(), advanceDay(), planNextDay(). Each returns { ok, message? }.
 // Read: getState() returns a detached snapshot. See results[].effects for actual deltas.
-// Phases: character -> planning -> resolving -> dayComplete -> checkpoint (day 2).
+// Phases: character -> planning -> resolving (or replanning) -> dayComplete -> checkpoint.
 // An optional rollDie(sides) must return an integer 1..sides. The UI can inject fixed rolls.
 ((root) => {
   "use strict";
@@ -17,6 +17,7 @@
     { id: "19:00", end: "21:00", name: "Evening", defaultCardId: "N01" },
   ].map(({ id, end, ...slot }) => Object.freeze({ id, time: `${id}–${end}`, ...slot })));
   const cards = root.SchoolCards;
+  const events = root.SchoolEvents;
   const cardsById = new Map(cards.map((card) => [card.id, card]));
   const slotIds = new Set(slots.map((slot) => slot.id));
   const statLimits = Object.freeze({ K: 240, M: 100, H: 20, A: 100, W: 99 });
@@ -45,22 +46,31 @@
 
   function applyEffect(player, { stat, delta, type }) {
     const before = player[stat];
-    const after = clamp(before + delta, 0, statLimits[stat]);
+    const after = clamp(before + delta, 0, stat === "C" ? 12 : statLimits[stat]);
     player[stat] = after;
     return { stat, type, requested: delta, delta: after - before, before, after };
   }
 
   function createGame({ rollDie = randomDie } = {}) {
+    const emptyPlan = () => Object.fromEntries(slots.map(({ id }) => [id, null]));
     const state = {
       day: 1,
       phase: "character",
       player: { I: null, C: null, CH: null, K: 8, M: 60, H: 14, A: 40, W: 8 },
       attributeRolls: null,
       rollsUsed: 0,
-      plan: Object.fromEntries(slots.map(({ id }) => [id, null])),
+      plan: emptyPlan(),
       slotIndex: 0,
       results: [],
       dayEnd: null,
+      unlockedCards: cards.filter((card) => !card.unlock).map((card) => card.id),
+      cardUses: {},
+      chanceEventsToday: 0,
+      seenThoughts: [],
+      eventFlags: [],
+      inventory: {},
+      nextAvailableDay: {},
+      environmentLastNight: null,
     };
 
     function rollDice(count, sides) {
@@ -91,32 +101,126 @@
       return accepted;
     }
 
-    function setCard(slotId, cardId) {
-      if (state.phase !== "planning") return reject("The schedule can only be edited before the day starts.");
-      if (!slotIds.has(slotId)) return reject("That time block does not exist.");
+    function isPlanning() {
+      return state.phase === "planning" || state.phase === "replanning";
+    }
+
+    function cardStatus(cardId) {
       const card = cardsById.get(cardId);
       if (!card) return reject("That card does not exist.");
+      if (card.consumable) {
+        if (!state.inventory[cardId]) return reject("You do not have a serving of this meal.");
+      } else if (!state.unlockedCards.includes(cardId)) {
+        return reject("This card is still locked.");
+      }
+      if (state.day < (state.nextAvailableDay[cardId] ?? 0)) {
+        return reject(`Available again on Day ${state.nextAvailableDay[cardId]}.`);
+      }
+      if (card.dailyLimit && state.results.filter((result) => result.cardId === cardId).length >= card.dailyLimit) {
+        return reject("Already used today.");
+      }
+      return accepted;
+    }
+
+    function canPlaceCard(slotId, cardId) {
+      if (!isPlanning()) return reject("The schedule is locked while time is being resolved.");
+      if (!slotIds.has(slotId)) return reject("That time block does not exist.");
+      if (slots.slice(0, state.slotIndex).some(({ id }) => id === slotId)) {
+        return reject("This time block has already been resolved.");
+      }
+      const status = cardStatus(cardId);
+      if (!status.ok) return status;
+      const card = cardsById.get(cardId);
       if (!card.allowedSlots.includes(slotId)) {
         const allowed = slots.filter(({ id }) => card.allowedSlots.includes(id)).map(({ time }) => time);
         return reject(`${card.name} can only be played at ${allowed.join(", ")}.`);
       }
+      if (card.dailyLimit || card.consumable) {
+        const alreadyPlanned = slots.slice(state.slotIndex).some(({ id }) => id !== slotId && state.plan[id] === cardId);
+        if (alreadyPlanned) return reject(`${card.name} is already assigned to another time block.`);
+      }
+      return accepted;
+    }
+
+    function setCard(slotId, cardId) {
+      const status = canPlaceCard(slotId, cardId);
+      if (!status.ok) return status;
       state.plan[slotId] = cardId;
       return accepted;
     }
 
     function fillDefaults() {
-      if (state.phase !== "planning") return reject("The schedule can only be edited before the day starts.");
-      for (const slot of slots) {
+      if (!isPlanning()) return reject("The schedule is locked while time is being resolved.");
+      for (const slot of slots.slice(state.slotIndex)) {
         state.plan[slot.id] ??= slot.defaultCardId;
       }
       return accepted;
     }
 
     function startDay() {
-      if (state.phase !== "planning") return reject("The day has already started.");
-      if (slots.some(({ id }) => !state.plan[id])) return reject("Fill every time block before starting the day.");
+      if (!isPlanning()) return reject("The day has already started.");
+      if (slots.slice(state.slotIndex).some(({ id }) => !state.plan[id])) return reject("Fill every remaining time block first.");
       state.phase = "resolving";
       return accepted;
+    }
+
+    function unlockCard(cardId) {
+      if (state.unlockedCards.includes(cardId)) return false;
+      state.unlockedCards.push(cardId);
+      return true;
+    }
+
+    function eventResult(event, rolls) {
+      const effects = [...(event.effects ?? [])];
+      let unlockedCardId = null;
+      if (event.cardId) {
+        if (unlockCard(event.cardId)) unlockedCardId = event.cardId;
+        else effects.push({ stat: "M", delta: 1 });
+      }
+      if (event.supply) state.inventory[event.supply] = 1;
+      if (event.flag) state.eventFlags.push(event.flag);
+      return {
+        name: event.name, rolls, unlockedCardId, supplyCardId: event.supply ?? null,
+        effects: effects.map((effect) => applyEffect(state.player, { ...effect, type: "event" })),
+      };
+    }
+
+    function drawCardEvent(card) {
+      if (!card.eventGate || state.chanceEventsToday >= 2) return null;
+      const [gate] = rollDice(1, 100);
+      const rolls = [`1d100=${gate} · ${card.eventGate}% chance`];
+      if (gate > card.eventGate) return { rolls };
+      state.chanceEventsToday += 1;
+      if (card.id === "C02") return eventResult(events.calledOn, rolls);
+      const unseen = events.thoughts.filter(({ id }) => !state.seenThoughts.includes(id));
+      if (!unseen.length) return eventResult(events.familiarThought, rolls);
+      const [draw] = rollDice(1, unseen.length);
+      const thought = unseen[draw - 1];
+      state.seenThoughts.push(thought.id);
+      return eventResult(thought, [...rolls, `1d${unseen.length}=${draw}`]);
+    }
+
+    function drawNightEvent() {
+      const previous = state.environmentLastNight;
+      state.environmentLastNight = null;
+      const knowledge = state.player.K;
+      const chance = knowledge < 30 ? 2 : knowledge < 60 ? 4 : knowledge < 100 ? 7 : 10;
+      const [thoughtRoll] = rollDice(1, 100);
+      if (thoughtRoll <= 2 * chance) {
+        return eventResult(thoughtRoll <= chance ? events.steady : events.empty, [`1d100=${thoughtRoll}`]);
+      }
+      const [gate] = rollDice(1, 100);
+      if (gate > 30) return null;
+      const [poolRoll] = rollDice(1, 100);
+      const pool = poolRoll <= 60 ? events.teacher : events.family;
+      const candidates = pool.filter((event) => event.id !== previous && !(event.supply && state.inventory[event.supply]));
+      if (!candidates.length) return null;
+      const total = candidates.reduce((sum, event) => sum + event.weight, 0);
+      const [draw] = rollDice(1, total);
+      let cumulative = 0;
+      const event = candidates.find((candidate) => (cumulative += candidate.weight) >= draw);
+      state.environmentLastNight = event.id;
+      return eventResult(event, [`1d100=${gate} · 30% chance`, `1d100=${poolRoll}`, `1d${total}=${draw}`]);
     }
 
     function resolveNext() {
@@ -132,17 +236,27 @@
         return { stat, count, sides, bonus, rolled, base, multiplier, requested };
       });
 
+      const fixed = card.fixedEffects.map(({ stat, delta }) => ({
+        stat, delta: delta > 0 ? Math.max(1, Math.floor(delta * gainMultiplier(stat, card, player) + 0.5)) : delta,
+      }));
       const effects = dice.map(({ stat, requested }) => applyEffect(player, { stat, delta: requested, type: "dice" }));
-      effects.push(...card.fixedEffects.map((effect) => applyEffect(player, { ...effect, type: "card" })));
+      effects.push(...fixed.map((effect) => applyEffect(player, { ...effect, type: "card" })));
       effects.push(applyEffect(player, { stat: "H", delta: -1, type: "slotHunger" }));
-      state.results.push({ slotId: slot.id, cardId: card.id, dice, effects, flavor: card.flavor });
+      state.cardUses[card.id] = (state.cardUses[card.id] ?? 0) + 1;
+      if (card.consumable) state.inventory[card.id] -= 1;
+      if (card.cooldown) state.nextAvailableDay[card.id] = state.day + card.cooldown + 1;
+      const earnedCardId = card.id === "N01" && state.cardUses.N01 >= 3 && unlockCard("N03") ? "N03" : null;
+      const event = drawCardEvent(card);
+      state.results.push({ slotId: slot.id, cardId: card.id, dice, effects, flavor: card.flavor, event, earnedCardId });
       state.slotIndex += 1;
 
       if (state.slotIndex === slots.length) {
         const effects = [];
         if (player.H <= 3) effects.push(applyEffect(player, { stat: "M", delta: -2, type: "nightHunger" }));
-        state.dayEnd = { effects };
+        state.dayEnd = { effects, event: drawNightEvent() };
         state.phase = "dayComplete";
+      } else if (event?.unlockedCardId && slots.slice(state.slotIndex).some(({ id }) => cardsById.get(event.unlockedCardId).allowedSlots.includes(id))) {
+        state.phase = "replanning";
       }
       return accepted;
     }
@@ -150,13 +264,26 @@
     function advanceDay() {
       if (state.phase !== "dayComplete") return reject("Finish today's schedule first.");
       state.day += 1;
+      if (state.day >= 3) unlockCard("F08");
       state.phase = "checkpoint";
+      return accepted;
+    }
+
+    function planNextDay() {
+      if (state.phase !== "checkpoint") return reject("Finish today's schedule first.");
+      state.phase = "planning";
+      state.plan = emptyPlan();
+      state.slotIndex = 0;
+      state.results = [];
+      state.dayEnd = null;
+      state.chanceEventsToday = 0;
       return accepted;
     }
 
     return Object.freeze({
       getState: () => structuredClone(state),
-      rollAttributes, acceptAttributes, setCard, fillDefaults, startDay, resolveNext, advanceDay,
+      rollAttributes, acceptAttributes, cardStatus, canPlaceCard, setCard, fillDefaults,
+      startDay, resolveNext, advanceDay, planNextDay,
     });
   }
 
