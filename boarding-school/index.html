@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Boarding School</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="cards.js" defer></script>
+  <script src="game.js" defer></script>
+  <script src="avatar.js" defer></script>
+  <script src="ui.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="masthead-inner">
+      <p class="day-label" id="day-label">Day 1</p>
+      <div class="school">
+        <p>Boarding School</p>
+        <p class="phase-label" id="phase-label">Enrollment</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <p class="startup-error" id="startup-error" role="status">
+      If the character options do not load, open the
+      <a href="https://padusrain.github.io/daguri-demo/boarding-school/">online game</a>
+      or open the complete game folder in a browser with JavaScript enabled.
+    </p>
+    <section class="enrollment" id="enrollment" aria-labelledby="enrollment-title">
+      <div class="enrollment-intro">
+        <h1 id="enrollment-title" tabindex="-1">Create Your Character</h1>
+        <div class="avatar-stage">
+          <div class="avatar-sprite avatar-large" id="avatar-preview" role="img" aria-label="Avatar preview"></div>
+        </div>
+        <p class="avatar-caption" id="avatar-caption" aria-live="polite"></p>
+      </div>
+      <div class="enrollment-form">
+        <section class="avatar-editor" aria-labelledby="avatar-editor-title">
+          <div class="avatar-editor-heading">
+            <h2 id="avatar-editor-title">Appearance</h2>
+            <button class="avatar-base-button" id="avatar-base" type="button">Show Base Avatar</button>
+          </div>
+          <fieldset class="avatar-group">
+            <legend>Hair</legend>
+            <div class="avatar-options" id="avatar-hair-options"></div>
+          </fieldset>
+          <fieldset class="avatar-group">
+            <legend>Outfit</legend>
+            <div class="avatar-options" id="avatar-outfit-options"></div>
+          </fieldset>
+        </section>
+        <section class="enrollment-attributes" aria-labelledby="enrollment-attributes-title">
+          <h2 id="enrollment-attributes-title">Starting Attributes</h2>
+          <p class="attribute-help">Roll 2d6 for each attribute. You can reroll the entire set once.</p>
+          <div class="attributes" id="attributes"></div>
+          <div class="actions enrollment-actions">
+            <button class="button secondary" id="roll" type="button" disabled>Roll Attributes</button>
+            <button class="button primary" id="accept" type="button" disabled>Enroll</button>
+          </div>
+          <details class="test-settings">
+            <summary>Test Settings</summary>
+            <label><input id="fixed-rolls" type="checkbox"> Use fixed dice rolls</label>
+            <p>Enable before rolling attributes. Each die rolls 3, or 2 for a two-sided die.</p>
+          </details>
+        </section>
+      </div>
+    </section>
+
+    <section id="workspace" hidden aria-labelledby="workspace-title">
+      <div class="workspace-intro">
+        <div>
+          <h1 id="workspace-title" tabindex="-1">Plan Your Day</h1>
+          <p id="workspace-help">Select a card, then select a time block.</p>
+        </div>
+        <div class="workspace-character">
+          <div class="avatar-sprite avatar-mini" id="workspace-avatar" role="img" aria-label="Your avatar"></div>
+          <details class="character-details">
+            <summary>Attributes</summary>
+            <p id="character-details"></p>
+          </details>
+        </div>
+      </div>
+
+      <div class="workspace-grid">
+        <section class="panel status-panel" aria-labelledby="status-title">
+          <div class="panel-header"><h2 id="status-title">Status</h2></div>
+          <div class="stats" id="stats"></div>
+        </section>
+
+        <section class="panel schedule" aria-labelledby="schedule-title">
+          <div class="panel-header">
+            <h2 id="schedule-title">Schedule</h2>
+            <button class="button small secondary" id="fill" type="button">Fill Empty Blocks</button>
+          </div>
+          <div class="slots" id="slots"></div>
+          <div class="actions schedule-actions">
+            <button class="button primary" id="start" type="button" disabled>Start Day</button>
+            <button class="button primary" id="resolve" type="button" hidden>Resolve 07:00–09:00</button>
+            <button class="button primary" id="advance" type="button" hidden>Continue to Day 2</button>
+            <button class="button secondary" id="restart" type="button" hidden>Restart</button>
+          </div>
+          <p id="feedback" class="feedback" role="status" aria-atomic="true"></p>
+        </section>
+
+        <section class="panel deck" id="deck" aria-labelledby="deck-title">
+          <div class="panel-header"><h2 id="deck-title">Activity Cards</h2></div>
+          <div class="cards" id="cards"></div>
+        </section>
+
+        <aside class="panel journal" aria-labelledby="journal-title">
+          <div class="panel-header"><h2 id="journal-title">Day Log</h2><p id="progress">0 / 7</p></div>
+          <p class="empty-journal" id="empty-journal">Rolls and stat changes appear here as you resolve time blocks.</p>
+          <ol class="log" id="log"></ol>
+        </aside>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
