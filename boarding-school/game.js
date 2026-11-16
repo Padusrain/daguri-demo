@@ -1,4 +1,4 @@
-// Game/UI contract. Load cards.js and events.js before calling SchoolGame.createGame({ rollDie? }).
+// Game/UI contract. Load card-text.js, cards.js and events.js before creating a game.
 // Actions: rollAttributes(), acceptAttributes(), setCard(slotId, cardId), fillDefaults(),
 // startDay(), resolveNext(), advanceDay(), planNextDay(). Each returns { ok, message? }.
 // Read: getState() returns a detached snapshot. See results[].effects for actual deltas.
@@ -64,12 +64,9 @@
       results: [],
       dayEnd: null,
       unlockedCards: cards.filter((card) => !card.unlock).map((card) => card.id),
-      cardUses: {},
       chanceEventsToday: 0,
       seenThoughts: [],
-      eventFlags: [],
       inventory: {},
-      nextAvailableDay: {},
       environmentLastNight: null,
     };
 
@@ -112,9 +109,6 @@
         if (!state.inventory[cardId]) return reject("You do not have a serving of this meal.");
       } else if (!state.unlockedCards.includes(cardId)) {
         return reject("This card is still locked.");
-      }
-      if (state.day < (state.nextAvailableDay[cardId] ?? 0)) {
-        return reject(`Available again on Day ${state.nextAvailableDay[cardId]}.`);
       }
       if (card.dailyLimit && state.results.filter((result) => result.cardId === cardId).length >= card.dailyLimit) {
         return reject("Already used today.");
@@ -178,20 +172,33 @@
         else effects.push({ stat: "M", delta: 1 });
       }
       if (event.supply) state.inventory[event.supply] = 1;
-      if (event.flag) state.eventFlags.push(event.flag);
       return {
         name: event.name, rolls, unlockedCardId, supplyCardId: event.supply ?? null,
         effects: effects.map((effect) => applyEffect(state.player, { ...effect, type: "event" })),
       };
     }
 
+    function unlockOptions(cardId) {
+      const card = cardsById.get(cardId);
+      return events.cardRewards.filter((reward) =>
+        (card.classroom || card.category === reward.category) && !state.unlockedCards.includes(reward.cardId)
+      );
+    }
+
     function drawCardEvent(card) {
-      if (!card.eventGate || state.chanceEventsToday >= 2) return null;
+      if (state.chanceEventsToday >= 2) return null;
+      const rewards = unlockOptions(card.id);
+      const chance = card.daydreamChance ?? rewards.reduce((total, reward) => total + reward.chance, 0);
+      if (!chance) return null;
       const [gate] = rollDice(1, 100);
-      const rolls = [`1d100=${gate} · ${card.eventGate}% chance`];
-      if (gate > card.eventGate) return { rolls };
+      const rolls = [`1d100=${gate} · ${chance}% chance`];
+      if (gate > chance) return { rolls };
       state.chanceEventsToday += 1;
-      if (card.id === "C02") return eventResult(events.calledOn, rolls);
+      if (!card.daydreamChance) {
+        let end = 0;
+        const reward = rewards.find((item) => (end += item.chance) >= gate);
+        return eventResult(reward, rolls);
+      }
       const unseen = events.thoughts.filter(({ id }) => !state.seenThoughts.includes(id));
       if (!unseen.length) return eventResult(events.familiarThought, rolls);
       const [draw] = rollDice(1, unseen.length);
@@ -242,12 +249,9 @@
       const effects = dice.map(({ stat, requested }) => applyEffect(player, { stat, delta: requested, type: "dice" }));
       effects.push(...fixed.map((effect) => applyEffect(player, { ...effect, type: "card" })));
       effects.push(applyEffect(player, { stat: "H", delta: -1, type: "slotHunger" }));
-      state.cardUses[card.id] = (state.cardUses[card.id] ?? 0) + 1;
       if (card.consumable) state.inventory[card.id] -= 1;
-      if (card.cooldown) state.nextAvailableDay[card.id] = state.day + card.cooldown + 1;
-      const earnedCardId = card.id === "N01" && state.cardUses.N01 >= 3 && unlockCard("N03") ? "N03" : null;
       const event = drawCardEvent(card);
-      state.results.push({ slotId: slot.id, cardId: card.id, dice, effects, flavor: card.flavor, event, earnedCardId });
+      state.results.push({ slotId: slot.id, cardId: card.id, dice, effects, flavor: card.flavor, event });
       state.slotIndex += 1;
 
       if (state.slotIndex === slots.length) {
@@ -264,7 +268,6 @@
     function advanceDay() {
       if (state.phase !== "dayComplete") return reject("Finish today's schedule first.");
       state.day += 1;
-      if (state.day >= 3) unlockCard("F08");
       state.phase = "checkpoint";
       return accepted;
     }
@@ -282,7 +285,7 @@
 
     return Object.freeze({
       getState: () => structuredClone(state),
-      rollAttributes, acceptAttributes, cardStatus, canPlaceCard, setCard, fillDefaults,
+      rollAttributes, acceptAttributes, cardStatus, unlockOptions, canPlaceCard, setCard, fillDefaults,
       startDay, resolveNext, advanceDay, planNextDay,
     });
   }

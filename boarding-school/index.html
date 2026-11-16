@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Boarding School</title>
   <link rel="stylesheet" href="style.css">
+  <script src="card-text.js" defer></script>
   <script src="cards.js" defer></script>
   <script src="events.js" defer></script>
   <script src="game.js" defer></script>
@@ -106,7 +107,12 @@
         </section>
 
         <section class="panel deck" id="deck" aria-labelledby="deck-title">
-          <div class="panel-header"><h2 id="deck-title">Activity Cards</h2></div>
+          <div class="panel-header">
+            <h2 id="deck-title">Activity Cards</h2>
+            <label class="card-filter">Category
+              <select id="card-category"></select>
+            </label>
+          </div>
           <div class="cards" id="cards"></div>
         </section>
 

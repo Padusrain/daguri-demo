@@ -2,15 +2,19 @@ window.SchoolEvents = {
   thoughts: [
     { id: "writer", name: "A Story of My Own", cardId: "F05" },
     { id: "physics", name: "Physics Beyond the Textbook", cardId: "F08" },
-    { id: "business", name: "My Own Business", flag: "business", effects: [{ stat: "A", delta: 1 }] },
-    { id: "work", name: "Money of My Own", flag: "work", effects: [{ stat: "A", delta: 1 }] },
+    { id: "business", name: "My Own Business", effects: [{ stat: "A", delta: 1 }] },
+    { id: "work", name: "Money of My Own", effects: [{ stat: "A", delta: 1 }] },
     { id: "outside", name: "A World Outside School", effects: [{ stat: "M", delta: 1 }, { stat: "A", delta: 1 }] },
-    { id: "signal", name: "A Signal to the Stars", flag: "alienSignal", effects: [{ stat: "A", delta: 2 }] },
+    { id: "signal", name: "A Signal to the Stars", effects: [{ stat: "A", delta: 2 }] },
     { id: "sleep", name: "What I Really Want Is Sleep", cardId: "N03" },
     { id: "today", name: "Write Down Today", effects: [{ stat: "A", delta: 2 }] },
   ],
   familiarThought: { name: "A Familiar Daydream", effects: [{ stat: "A", delta: 1 }] },
-  calledOn: { name: "Called on in Class", effects: [{ stat: "M", delta: -3 }] },
+  // Classroom actions are eligible for both rewards. Other actions use their category.
+  cardRewards: [
+    { name: "A Tip for Reviewing Mistakes", cardId: "F08", chance: 10, category: "social" },
+    { name: "A Better Way to Call It a Night", cardId: "N03", chance: 10, category: "rest" },
+  ],
   teacher: [
     { id: "encouragement", name: "A Word of Encouragement", weight: 40, effects: [{ stat: "M", delta: 5 }, { stat: "A", delta: 1 }] },
     { id: "criticism", name: "Criticized in Front of the Class", weight: 35, effects: [{ stat: "M", delta: -6 }] },

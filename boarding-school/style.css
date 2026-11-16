@@ -153,9 +153,16 @@ input[type="checkbox"] { accent-color: var(--green); }
 .slot-card { background: var(--card-paper); border: 1px solid var(--card-line); color: var(--ink); font-weight: 700; }
 .slot-card small { margin-top: 3px; color: var(--muted); font-weight: 400; }
 .card, .slot-card { --card-paper: #f1e9ee; --card-line: #76576e; --card-heading: #eadce5; }
-.classroom { --card-paper: #edf3f3; --card-line: #4d7074; --card-heading: #dae8e9; }
-.meal { --card-paper: #f7eddd; --card-line: #88643c; --card-heading: #efe0c5; }
-.free { --card-paper: #eef1e7; --card-line: #58764c; --card-heading: #e2e9d7; }
+.learning { --card-paper: #edf3f3; --card-line: #4d7074; --card-heading: #dae8e9; }
+.eating { --card-paper: #f7eddd; --card-line: #88643c; --card-heading: #efe0c5; }
+.rest { --card-paper: #eef1e7; --card-line: #58764c; --card-heading: #e2e9d7; }
+.social { --card-paper: #f3edf6; --card-line: #745881; --card-heading: #e9dcef; }
+.romance { --card-paper: #f8eded; --card-line: #8c5860; --card-heading: #f1dce0; }
+.business { --card-paper: #f5f1e1; --card-line: #7b6e36; --card-heading: #ece4bf; }
+.aliens { --card-paper: #edf1f9; --card-line: #485c87; --card-heading: #dce6f7; }
+.card-filter { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: var(--muted); }
+.card-filter select { font: inherit; border: 1px solid var(--rule); border-radius: 4px; padding: 5px; background: var(--surface); color: var(--ink); }
+.empty-cards { grid-column: 1 / -1; padding-block: 12px; color: var(--muted); }
 .card {
   display: grid;
   grid-template-rows: auto auto 1fr auto;
@@ -177,6 +184,7 @@ input[type="checkbox"] { accent-color: var(--green); }
 .card-title { min-height: 2.8em; display: grid; place-items: center; padding: 5px 4px; border: 1px solid var(--card-line); border-radius: 7px 7px 4px 4px; background: var(--card-heading); font: 700 1rem/1.15 var(--title); }
 .card-type { justify-self: center; border-bottom: 1px solid var(--card-line); padding-inline: 4px; color: var(--muted); font-size: 0.74rem; }
 .card-rules { display: grid; gap: 3px; align-self: center; font-size: 0.85rem; line-height: 1.25; }
+.card-description { color: var(--muted); font-style: italic; margin-bottom: 2px; }
 .card-slots { border-top: 1px solid var(--card-line); padding-top: 6px; color: var(--muted); font: 0.69rem/1.4 var(--number); }
 
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }

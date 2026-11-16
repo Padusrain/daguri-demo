@@ -7,11 +7,18 @@
     I: "Intelligence", C: "Constitution", CH: "Charisma",
     K: "Knowledge", M: "Mental State", H: "Fullness", A: "Self-Belief", W: "Pocket Money",
   };
-  const categories = { classroom: "Class", meal: "Meal", free: "Free Time", night: "Evening" };
+  const categories = window.SchoolCardCategories;
   const byId = Object.fromEntries(cards.map((card) => [card.id, card]));
   const slotById = Object.fromEntries(slots.map((slot) => [slot.id, slot]));
   const element = (id) => document.getElementById(id);
   const signed = (value) => value < 0 ? `−${-value}` : `+${value}`;
+  const textHTML = (value = "") => value.replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[char]);
+  const categoryFilter = element("card-category");
+  categoryFilter.innerHTML = '<option value="all">All categories</option>' +
+    Object.entries(categories).map(([id, label]) => `<option value="${id}">${label}</option>`).join("");
+  categoryFilter.value = "all";
   const avatar = window.SchoolAvatar.mount();
   let game = createGame();
   let selectedCardId = null;
@@ -52,28 +59,38 @@
         <span class="slot-time">${slot.time}</span>
         <span class="slot-name">${slot.name}</span>
         ${assigned
-          ? `<span class="slot-card ${assigned.category}">${assigned.name}${completed ? '<small>Resolved</small>' : ""}</span>`
+          ? `<span class="slot-card ${assigned.category}">${textHTML(assigned.name)}${completed ? '<small>Resolved</small>' : ""}</span>`
           : '<span class="slot-empty">Place a card</span>'}
       </button>`;
     }).join("");
   }
 
   function renderCards(state) {
-    element("cards").innerHTML = cards.filter((card) =>
-      state.unlockedCards.includes(card.id) || state.inventory[card.id] > 0
-    ).map((card) => {
+    const category = categoryFilter.value;
+    const visible = cards.filter((card) =>
+      (category === "all" || card.category === category) &&
+      (state.unlockedCards.includes(card.id) || state.inventory[card.id] > 0)
+    );
+    element("cards").innerHTML = visible.map((card) => {
       const rolls = card.diceEffects.map((die) => `Gain ${diceLabel(die)} ${names[die.stat]}.`);
       const fixed = card.fixedEffects.map(({ stat, delta }) => `${delta < 0 ? "Lose" : "Gain"} ${Math.abs(delta)} ${names[stat]}.`);
       const plays = card.allowedSlots.map((id) => slotById[id].time);
       const status = game.cardStatus(card.id);
+      const chances = card.daydreamChance
+        ? [`${card.daydreamChance}% chance of a daydream event.`]
+        : game.unlockOptions(card.id).map(({ cardId, chance }) => `${chance}% chance to unlock ${byId[cardId].name}.`);
+      const notes = [card.dailyLimit && "Once per day.", card.consumable && "Single use.", status.message, ...chances];
       return `<button type="button" class="card ${card.category}" data-card="${card.id}"
         aria-pressed="${selectedCardId === card.id}" ${status.ok ? "" : "disabled"}>
-        <strong class="card-title">${card.name}</strong>
+        <strong class="card-title">${textHTML(card.name)}</strong>
         <span class="card-type">${categories[card.category]}</span>
-        <span class="card-rules">${[...rolls, ...fixed, card.note, status.message].filter(Boolean).map((line) => `<span>${line}</span>`).join("")}</span>
+        <span class="card-rules">
+          ${card.description ? `<span class="card-description">${textHTML(card.description)}</span>` : ""}
+          ${[...rolls, ...fixed, ...notes].filter(Boolean).map((line) => `<span>${textHTML(line)}</span>`).join("")}
+        </span>
         <span class="card-slots">${plays.join(" · ")}</span>
       </button>`;
-    }).join("");
+    }).join("") || '<p class="empty-cards">No available cards in this category.</p>';
   }
 
   function renderStatus(player) {
@@ -99,9 +116,9 @@
       event.unlockedCardId && `Unlocked ${byId[event.unlockedCardId].name}.`,
       event.supplyCardId && `Received 1 serving of ${byId[event.supplyCardId].name} for a later meal.`,
     ].filter(Boolean);
-    return `<div class="entry-event"><h4>${event.name}</h4>
+    return `<div class="entry-event"><h4>${textHTML(event.name)}</h4>
       <p class="dice-result">${event.rolls.join(" / ")}</p>
-      ${rewards.length ? `<p>${rewards.join(" ")}</p>` : ""}
+      ${rewards.length ? `<p>${textHTML(rewards.join(" "))}</p>` : ""}
       ${event.effects.length ? `<ul class="effects">${event.effects.map(effectLine).join("")}</ul>` : ""}
     </div>`;
   }
@@ -113,12 +130,11 @@
     });
     return `<li class="entry" data-result="${result.slotId}">
       <p class="entry-time">${slotById[result.slotId].time}</p>
-      <h3>${byId[result.cardId].name}</h3>
+      <h3>${textHTML(byId[result.cardId].name)}</h3>
       ${rolls.length ? `<p class="dice-result">${rolls.join(" / ")}</p>` : ""}
       <ul class="effects">${result.effects.map(effectLine).join("")}</ul>
-      <p class="flavor">${result.flavor}</p>
+      <p class="flavor">${textHTML(result.flavor)}</p>
       ${journalEvent(result.event)}
-      ${result.earnedCardId ? `<p class="entry-event">Unlocked ${byId[result.earnedCardId].name}.</p>` : ""}
     </li>`;
   }
 
@@ -216,6 +232,14 @@
     if (run(game.acceptAttributes)) element("workspace-title").focus();
   });
   element("fill").addEventListener("click", () => run(game.fillDefaults, "Default cards filled the empty blocks."));
+  categoryFilter.addEventListener("change", () => {
+    const state = game.getState();
+    if (!canEdit(state)) return;
+    selectedCardId = null;
+    renderCards(state);
+    renderSlots(state);
+    feedback("");
+  });
   element("cards").addEventListener("click", (event) => {
     const button = event.target.closest("[data-card]");
     const state = game.getState();
@@ -252,7 +276,11 @@
       feedback(event?.unlockedCardId
         ? `Unlocked ${byId[event.unlockedCardId].name}.`
         : `${slotById[slotId].time} resolved.`);
-      if (phase === "replanning") element("start").focus();
+      if (phase === "replanning") {
+        categoryFilter.value = "all";
+        renderCards(game.getState());
+        element("start").focus();
+      }
       if (phase === "dayComplete") element("advance").focus();
     }
   });
@@ -269,6 +297,7 @@
   element("restart").addEventListener("click", () => {
     game = createGame();
     avatar.reset();
+    categoryFilter.value = "all";
     selectedCardId = null;
     resetJournal();
     element("workspace").querySelector("details").open = false;
